@@ -93,10 +93,33 @@ func ExchangeRate(dbClient *sql.DB, apiUrl string, w http.ResponseWriter, r *htt
 	w.Write([]byte(result.USDBRL.Bid))
 }
 
-func Start(dbClient *sql.DB) {
+func Healthz(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+func Start(dbClient *sql.DB, ready chan struct{}) {
+	http.HandleFunc("/healthz", Healthz)
 	http.HandleFunc("/cotacao", func(w http.ResponseWriter, r *http.Request) {
 		ExchangeRate(dbClient, "https://economia.awesomeapi.com.br/json/last/usd-brl", w, r)
 	})
 
-	http.ListenAndServe(":8080", nil)
+	go func() {
+		if err := http.ListenAndServe(":8080", nil); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("Failed to start server: %v\n", err)
+		}
+	}()
+
+	for {
+		resp, err := http.Get("http://localhost:8080/healthz")
+		if err == nil && resp.StatusCode == http.StatusOK {
+			break
+		}
+
+		fmt.Println("Waiting for server to start...")
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	fmt.Println("Server started on port 8080")
+	close(ready)
 }

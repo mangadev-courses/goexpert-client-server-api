@@ -10,6 +10,12 @@ func main() {
 	db := db.DbClient()
 	defer db.Close()
 
-	go server.Start(db)
-	client.FetchExchangeRate("http://localhost:8080/cotacao")
+	ready := make(chan struct{})
+	server.Start(db, ready)
+	<-ready
+
+	err := client.FetchExchangeRate("http://localhost:8080/cotacao")
+	if err != nil {
+		panic(err)
+	}
 }
